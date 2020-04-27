@@ -36,7 +36,7 @@ num_XYZ = data_XYZ.__len__()
 XYZ_type = data_XYZ[0].__len__()
 ######algorithm###################
 
-#################################################
+###############################################################cal
 
 def cal_a1(phi, omega, kappa):
     a1 = math.cos(phi)*math.cos(kappa)-math.sin(phi)*math.sin(omega)*math.sin(kappa)
@@ -160,10 +160,72 @@ def cal_a26(x, x0):
     return a26
     # pass
 
-#################################################
+#已解求外方位元素方程
+#带入时间返回外方位元素
+def cal_gps(time,a0,a1,a2,b0,b1,b2,c0,c1,c2,d0,d1,d2,e0,e1,e2,f0,f1,f2):
+    X = a0+a1*time+a2*pow(time,2)
+    Y = b0+b1*time+b2*pow(time,2)
+    Z = c0+c2*time+c2*pow(time,2)
+    O = d0+d1*time+d2*pow(time,2)#omega
+    P = e0+e1*time+e2*pow(time,2)#phi
+    K = f0+f1*time+f2*pow(time,2)#kappa
+
+    return X,Y,Z,O,P,K
+
+#计算旋转矩阵
+def cal_para(X,Y,Z,omega,phi,kappa):
+    a1 = cal_a1(phi, omega, kappa)
+    a2 = cal_a2(phi, omega, kappa)
+    a3 = cal_a3(phi, omega, kappa)
+    
+    b1 = cal_b1(phi, omega, kappa)
+    b2 = cal_b2(phi, omega, kappa)
+    b3 = cal_b3(phi, omega, kappa)
+    
+    c1 = cal_c1(phi, omega, kappa)
+    c2 = cal_c2(phi, omega, kappa)
+    c3 = cal_c3(phi, omega, kappa)
+
+    return a1,a2,a3,b1,b2,b3,c1,c2,c3
+
+#计算像方点
+def cal_ptopts(R,X,Y,Z,Xs,Ys,Zs):
+    XX = cal_X(R[0][0],R[1][0],R[2][0],X,Xs,Y,Ys,Z,Zs)
+    YY = cal_Y(R[0][1],R[1][1],R[2][1],X,Xs,Y,Ys,Z,Zs)
+    ZZ = cal_Z(R[0][2],R[1][2],R[2][2],X,Xs,Y,Ys,Z,Zs)
+
+    x = XX/ZZ
+    y = YY/ZZ
+
+    return x,y
+
+#四元数转换为旋转矩阵
+def q2rotate(q1, q2, q3, q4):
+    '''
+    四元数转为旋转矩阵
+    本体到J2000
+    data为data_att
+    data[0]: time
+    data[1]: q1
+    dara[2]: q2
+    dara[3]: q3
+    data[4]: q4
+    '''
+    a1 = 1-2*(pow(q2,2)+pow(q3,2))
+    a2 = 2*(q1*q2-q3*q4)
+    a3 = 2*(q1*q3+q2*q4)
+    b1 = 2*(q1*q2+q3*q4)
+    b2 = 1-2*(pow(q1,2)+pow(q3,2))
+    b3 = 2*(q2*q3-q1*q4)
+    c1 = 2*(q1*q3-q2*q4)
+    c2 = 2*(q2*q3+q1*q4)
+    c3 = 1-2*(pow(q2,2)+pow(q2,2))
+    R = np.array([[a1, a2, a3], [b1, b2, b3], [c1, c2, c3]])
+    return R
+
+###############################################################fitting
 
 #找到前后元素
-#反投影好像不需要？
 def get_i(time,index,data):
     num = data.__len__()
     # data_type = data[0].__len__()
@@ -191,7 +253,7 @@ def get_i(time,index,data):
     else:
         front = dt_loc
         back = dt_return_loc
-    print('front:'+str(front)+'\t'+'back:'+str(back))
+    # print('front:'+str(front)+'\t'+'back:'+str(back))
 
     return front, back
 
@@ -257,84 +319,17 @@ def interpolation_gps(data):
     # plt.legend() #绘制图例
     # plt.show()
 
-    return a0,a1,a2,b0,b1,b2,c0,c1,c2,d0,d1,d2,e0,e1,e2,f0,f1,f2
-
-#已解求外方位元素方程
-#带入时间返回外方位元素
-def cal_gps(time,a0,a1,a2,b0,b1,b2,c0,c1,c2,d0,d1,d2,e0,e1,e2,f0,f1,f2):
-    X = a0+a1*time+a2*pow(time,2)
-    Y = b0+b1*time+b2*pow(time,2)
-    Z = c0+c2*time+c2*pow(time,2)
-    O = d0+d1*time+d2*pow(time,2)#omega
-    P = e0+e1*time+e2*pow(time,2)#phi
-    K = f0+f1*time+f2*pow(time,2)#kappa
-
-    return X,Y,Z,O,P,K
-
-#计算旋转矩阵
-def cal_para(X,Y,Z,omega,phi,kappa):
-    a1 = cal_a1(phi, omega, kappa)
-    a2 = cal_a2(phi, omega, kappa)
-    a3 = cal_a3(phi, omega, kappa)
-    
-    b1 = cal_b1(phi, omega, kappa)
-    b2 = cal_b2(phi, omega, kappa)
-    b3 = cal_b3(phi, omega, kappa)
-    
-    c1 = cal_c1(phi, omega, kappa)
-    c2 = cal_c2(phi, omega, kappa)
-    c3 = cal_c3(phi, omega, kappa)
-
-    return a1,a2,a3,b1,b2,b3,c1,c2,c3
-
-#计算像方点
-def cal_ptopts(R,X,Y,Z,Xs,Ys,Zs):
-    XX = cal_X(R[0][0],R[1][0],R[2][0],X,Xs,Y,Ys,Z,Zs)
-    YY = cal_Y(R[0][1],R[1][1],R[2][1],X,Xs,Y,Ys,Z,Zs)
-    ZZ = cal_Z(R[0][2],R[1][2],R[2][2],X,Xs,Y,Ys,Z,Zs)
-
-    x = XX/ZZ
-    y = YY/ZZ
-
-    return x,y
-
-#四元数转换为旋转矩阵
-def q2rotate(q1, q2, q3, q4):
-    '''
-    四元数转为旋转矩阵
-    本体到J2000
-    data为data_att
-    data[0]: time
-    data[1]: q1
-    dara[2]: q2
-    dara[3]: q3
-    data[4]: q4
-    '''
-    a1 = 1-2*(pow(q2,2)+pow(q3,2))
-    a2 = 2*(q1*q2-q3*q4)
-    a3 = 2*(q1*q3+q2*q4)
-    b1 = 2*(q1*q2+q3*q4)
-    b2 = 1-2*(pow(q1,2)+pow(q3,2))
-    b3 = 2*(q2*q3-q1*q4)
-    c1 = 2*(q1*q3-q2*q4)
-    c2 = 2*(q2*q3+q1*q4)
-    c3 = 1-2*(pow(q2,2)+pow(q2,2))
-    R = np.array([[a1, a2, a3], [b1, b2, b3], [c1, c2, c3]])
-    return R
+    return (a0,a1,a2,b0,b1,b2,c0,c1,c2,d0,d1,d2,e0,e1,e2,f0,f1,f2)
 
 #四元数内插计算（本体到J2000）
 def interpolation_q(data,time):
-    num = data.__len__()
-    data_type = data[0].__len__()
-    front,back = get_i(time,0,data_att)
-    # print(data[front],data[back])
+    front,back = get_i(time,0,data_att)#得到前一项和后一项的行号
+
     t0 = data[front][0]
     t1 = data[back][0]
 
     q0 = np.array([data[front][1],data[front][2],data[front][3],data[front][4]])
     q1 = np.array([data[back][1],data[back][2],data[back][3],data[back][4]])
-
-    # scipy.spatial.transform.Slerp()
     
     q0_ = q0.reshape(1,4)
     q1_ = q1.reshape(4,1)
@@ -345,45 +340,40 @@ def interpolation_q(data,time):
     miu1 = math.sin(theta*(time-t0)/(t1-t0))/math.sin(theta)
 
     qt = miu0*q0+miu1*q1
-
     # print(qt)
 
     return qt
 
-#二分法
-#判断应向哪边分
-def dicho_symbol():
-    pass
-
+###############################################################dicho
 #二分法迭代求解搜索窗口范围
 #搜索出的结果仅为窗口范围，减小搜索区间，并不是最终确认的扫描行
 #判断迭代终止的条件：确定该扫描行的外方位元素满足m11*(X-XS)+m12*(Y-YS)+m13*(Z-ZS)=0
-def dicho_iter(data):
+def dicho_iter(data,a):
     num = data.__len__()
     data_type = data[0].__len__()
-    print(num)
-
-    a0,a1,a2,b0,b1,b2,c0,c1,c2,d0,d1,d2,e0,e1,e2,f0,f1,f2 = interpolation_gps(data_gps)
+    # print(num)    
     XX = get_array(data,0)#物方X
     YY = get_array(data,1)#物方Y
     ZZ = get_array(data,2)#物方Z
-    Ns = 0
     NNS = []
-    Ne = cols-2
     NNE = []
     iteration = True
     for i in range(0,num):
         X = XX[i]
         Y = YY[i]
         Z = ZZ[i]
+        Ns = 0
+        Ne = cols-2
         iteration = True
-        while iteration:
+
+        while iteration == True:
+            # print('iteration')
             N_ = int((Ns+Ne)/2)
-            Xs,Ys,Zs,Os,Ps,Ks = cal_gps(data_time[Ns][0],a0,a1,a2,b0,b1,b2,c0,c1,c2,d0,d1,d2,e0,e1,e2,f0,f1,f2)
+            Xs,Ys,Zs,Os,Ps,Ks = cal_gps(data_time[Ns][0],a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8],a[9],a[10],a[11],a[12],a[13],a[14],a[15],a[16],a[17])
             #起点行外方位元素
-            X_,Y_,Z_,O_,P_,K_ = cal_gps(data_time[N_][0],a0,a1,a2,b0,b1,b2,c0,c1,c2,d0,d1,d2,e0,e1,e2,f0,f1,f2)
+            X_,Y_,Z_,O_,P_,K_ = cal_gps(data_time[N_][0],a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8],a[9],a[10],a[11],a[12],a[13],a[14],a[15],a[16],a[17])
             #中间行外方位元素
-            Xe,Ye,Ze,Oe,Pe,Ke = cal_gps(data_time[Ne][0],a0,a1,a2,b0,b1,b2,c0,c1,c2,d0,d1,d2,e0,e1,e2,f0,f1,f2)
+            Xe,Ye,Ze,Oe,Pe,Ke = cal_gps(data_time[Ne][0],a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8],a[9],a[10],a[11],a[12],a[13],a[14],a[15],a[16],a[17])
             #终点行外方位元素
             qs = interpolation_q(data_att,data_time[Ns][0])
             q_ = interpolation_q(data_att,data_time[N_][0])
@@ -397,8 +387,9 @@ def dicho_iter(data):
             x_,y_ = cal_ptopts(R_,X,Y,Z,X_,Y_,Z_)
             xe,ye = cal_ptopts(Re,X,Y,Z,Xe,Ye,Ze)
 
-            print(xs,x_,xe)            
+            # print(xs,x_,xe,Ns,Ne) 
             
+            #判断条件有误
             if (xs*x_<=0):
                 Ne = N_
             elif (x_*xe<=0):
@@ -407,13 +398,56 @@ def dicho_iter(data):
                 Ns = int((Ns+N_)/2)
                 Ne = int((Ne+N_)/2)
 
-            if ((Ns-Ne)<20):
+            if int(Ne-Ns)<20:
+                iteration = False
                 NNS.append(Ns)
                 NNE.append(Ne)
-                iteration = False
+            else:
+                iteration = True
+                continue
   
     return NNS,NNE
 
+###############################################################back
+#反投影
+def bk_pro(data,a,NNS,NNE):
+    num = data.__len__()
+    data_type = data[0].__len__()
+    # print(num)
+    XX = get_array(data,0)#物方X
+    YY = get_array(data,1)#物方Y
+    ZZ = get_array(data,2)#物方Z
+    x = []
+    y = []
+
+    iteration = True
+    for i in range(0,num):
+        X = XX[i]
+        Y = YY[i]
+        Z = ZZ[i]
+        N_ = NNS[i]
+        Ne = NNE[i]
+        iteration = True
+        while iteration:
+
+            X_,Y_,Z_,O_,P_,K_ = cal_gps(data_time[N_][0],a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8],a[9],a[10],a[11],a[12],a[13],a[14],a[15],a[16],a[17])
+            q_ = interpolation_q(data_att,data_time[N_][0])
+            R_ = q2rotate(q_[0],q_[1],q_[2],q_[3])
+            x_,y_ = cal_ptopts(R_,X,Y,Z,X_,Y_,Z_)
+            # print(abs(x_),y_,N_,Ne)
+
+            if abs(x_)<0.003 or N_==Ne:
+                iteration = False
+                x.append(int(N_))
+                y.append(int(y_))
+            else:
+                iteration = True
+                N_ = N_+1
+                continue
+
+    return x,y
+
+###############################################################test
 #测试航带走向
 def data_display(data):
     num = data.__len__()
@@ -466,5 +500,17 @@ def plt_test():
     plt.show()
 
 if __name__ == "__main__":
-    dicho_iter(data_XYZ)
+    num = data_XYZ.__len__()
+    a = interpolation_gps(data_gps)#扫描行外方位元素 系数
+    NNS,NNE = dicho_iter(data_XYZ,a)#二分法得到的 行区间范围
+    x,y = bk_pro(data_XYZ,a,NNS,NNE)#像方点计算
+    
+    for i in range(num):
+        print('the feature coordinate===>')
+        print('this is the %d point',i)
+        print('X:'+str(data_XYZ[i][0]))
+        print('Y:'+str(data_XYZ[i][1]))
+        print('Z:'+str(data_XYZ[i][2]))
+        print('x:'+str(x[i]))
+        print('y:'+str(y[i]))
     pass
