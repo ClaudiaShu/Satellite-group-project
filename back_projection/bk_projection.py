@@ -368,7 +368,9 @@ def dicho_iter(data):
     YY = get_array(data,1)#物方Y
     ZZ = get_array(data,2)#物方Z
     Ns = 0
+    NNS = []
     Ne = cols-2
+    NNE = []
     iteration = True
     for i in range(0,num):
         X = XX[i]
@@ -395,11 +397,22 @@ def dicho_iter(data):
             x_,y_ = cal_ptopts(R_,X,Y,Z,X_,Y_,Z_)
             xe,ye = cal_ptopts(Re,X,Y,Z,Xe,Ye,Ze)
 
-            print(xs,x_,xe)
+            print(xs,x_,xe)            
+            
+            if (xs*x_<=0):
+                Ne = N_
+            elif (x_*xe<=0):
+                Ns = N_
+            else:
+                Ns = int((Ns+N_)/2)
+                Ne = int((Ne+N_)/2)
 
-            iteration = False
+            if ((Ns-Ne)<20):
+                NNS.append(Ns)
+                NNE.append(Ne)
+                iteration = False
   
-    pass
+    return NNS,NNE
 
 #测试航带走向
 def data_display(data):
