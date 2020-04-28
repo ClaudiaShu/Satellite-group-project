@@ -9,31 +9,43 @@ import tensorflow as tf
 import scipy
 from scipy.optimize import leastsq
 
+#omega x
+#phi y
+#kappa z
 
 #8192*5378
 rows = 8192
 cols = 5378
 ######config######################
 #四元数数据
+print('getting quaternion data')
 data_att = read_data.read_att()
 num_att = data_att.__len__()
 att_type = data_att[0].__len__()
 #轨迹数据
+print('getting GPS data')
 data_gps = read_data.read_gps()
 num_gps = data_gps.__len__()
 gps_type = data_gps[0].__len__()
 #线阵拍摄时间5378
+print('getting timecode')
 data_time = read_data.read_time()
 num_time = data_time.__len__()
 time_type = data_time[0].__len__()
 #视向方向数据8192
+print('getting look angle')
 data_cbr = read_data.read_cbr()
 num_cbr = data_cbr.__len__()
 cbr_type = data_cbr[0].__len__()
 #物点数据
+print('grtting control points')
 data_XYZ = read_data.get_XYZ()
 num_XYZ = data_XYZ.__len__()
 XYZ_type = data_XYZ[0].__len__()
+#J2000到WGS84旋转矩阵
+print('getting rotation angle')
+r_time,data_J2W = read_data.read_J2W()
+num_J2W = data_J2W.__len__()
 ######algorithm###################
 
 ###############################################################cal
@@ -163,6 +175,7 @@ def cal_a26(x, x0):
 #已解求外方位元素方程
 #带入时间返回外方位元素
 def cal_gps(time,a0,a1,a2,b0,b1,b2,c0,c1,c2,d0,d1,d2,e0,e1,e2,f0,f1,f2):
+    
     X = a0+a1*time+a2*pow(time,2)
     Y = b0+b1*time+b2*pow(time,2)
     Z = c0+c2*time+c2*pow(time,2)
@@ -173,7 +186,7 @@ def cal_gps(time,a0,a1,a2,b0,b1,b2,c0,c1,c2,d0,d1,d2,e0,e1,e2,f0,f1,f2):
     return X,Y,Z,O,P,K
 
 #计算旋转矩阵
-def cal_para(X,Y,Z,omega,phi,kappa):
+def cal_para(omega,phi,kappa):
     a1 = cal_a1(phi, omega, kappa)
     a2 = cal_a2(phi, omega, kappa)
     a3 = cal_a3(phi, omega, kappa)
@@ -186,7 +199,9 @@ def cal_para(X,Y,Z,omega,phi,kappa):
     c2 = cal_c2(phi, omega, kappa)
     c3 = cal_c3(phi, omega, kappa)
 
-    return a1,a2,a3,b1,b2,b3,c1,c2,c3
+    R = np.array([[a1, a2, a3], [b1, b2, b3], [c1, c2, c3]])
+
+    return R
 
 #计算像方点
 def cal_ptopts(R,X,Y,Z,Xs,Ys,Zs):
@@ -222,6 +237,38 @@ def q2rotate(q1, q2, q3, q4):
     c3 = 1-2*(pow(q2,2)+pow(q2,2))
     R = np.array([[a1, a2, a3], [b1, b2, b3], [c1, c2, c3]])
     return R
+
+#判断是旋转矩阵
+def isRotationMatrix(R) :
+    Rt = np.transpose(R)
+    shouldBeIdentity = np.dot(Rt, R)
+    I = np.identity(3, dtype = R.dtype)
+    n = np.linalg.norm(I - shouldBeIdentity)
+    return n < 1e-6
+
+#旋转矩阵转欧拉角
+def R2A(R) :
+    assert(isRotationMatrix(R))
+
+    phi = -math.atan(R[0][2]/R[2][2])
+    omega = -math.asin(R[1][2])
+    kappa = -math.atan(R[1][0]/R[1][1])
+    
+    # sy = math.sqrt(R[0,0] * R[0,0] +  R[1,0] * R[1,0])
+    
+    # singular = sy < 1e-6
+
+    # if  not singular :
+    #     x = math.atan2(R[2,1] , R[2,2])
+    #     y = math.atan2(-R[2,0], sy)
+    #     z = math.atan2(R[1,0], R[0,0])
+    # else :
+    #     x = math.atan2(-R[1,2], R[1,1])
+    #     y = math.atan2(-R[2,0], sy)
+    #     z = 0
+
+    return np.array([phi, omega, kappa])
+
 
 ###############################################################fitting
 
@@ -275,10 +322,24 @@ def func(params, x):
 def error(params, x, y):
     return func(params, x) - y
 
+#一次函数的标准形式
+def func_sin(params, x):
+    k, b = params
+    return k * x + b
+
+#一次误差函数
+def error_sin(params, x, y):
+    return func_sin(params, x) - y
+
 # 对参数求解
 def fitting_poly(X, Y):
     p0 = [10, 10, 10]
     Para = leastsq(error, p0, args=(X, Y))
+    return Para
+
+def fitting_poly_sin(X, Y):
+    p0 = [10, 10]
+    Para = leastsq(error_sin, p0, args=(X, Y))
     return Para
 
 #gps数据内插计算
@@ -344,21 +405,51 @@ def interpolation_q(data,time):
 
     return qt
 
+def angle_para():
+    angle = []
+    for i in range(num_J2W):
+        angle.append(R2A(data_J2W[i]))
+        # print(angle)
+    phi = get_array(angle,0)
+    omega = get_array(angle,1)
+    kappa = get_array(angle,2)
+
+    # print(phi)
+    # print(omega)
+    # print(kappa) 
+
+    k1,b1 = fitting_poly_sin(r_time,phi)[0]
+    k2,b2 = fitting_poly_sin(r_time,omega)[0]
+    k3,b3 = fitting_poly_sin(r_time,kappa)[0]
+    # print(k1,b1,k2,b2,k3,b3)
+
+    return (k1,b1,k2,b2,k3,b3)
+
+def linear_angle(time,r_para):
+    phi = r_para[0]*time+r_para[1]
+    omega = r_para[2]*time+r_para[3]
+    kappa = r_para[4]*time+r_para[5]
+    # print(phi,omega,kappa)
+    R = cal_para(phi,omega,kappa)
+    
+    return R
+
 ###############################################################dicho
 #二分法迭代求解搜索窗口范围
 #搜索出的结果仅为窗口范围，减小搜索区间，并不是最终确认的扫描行
 #判断迭代终止的条件：确定该扫描行的外方位元素满足m11*(X-XS)+m12*(Y-YS)+m13*(Z-ZS)=0
-def dicho_iter(data,a):
+def dicho_iter(data,a,r_para):
     num = data.__len__()
     data_type = data[0].__len__()
     # print(num)    
     XX = get_array(data,0)#物方X
     YY = get_array(data,1)#物方Y
     ZZ = get_array(data,2)#物方Z
-    NNS = []
-    NNE = []
+    NNX = []
+    NNY = []
     iteration = True
     for i in range(0,num):
+        print('====================================')
         X = XX[i]
         Y = YY[i]
         Z = ZZ[i]
@@ -369,25 +460,34 @@ def dicho_iter(data,a):
         while iteration == True:
             # print('iteration')
             N_ = int((Ns+Ne)/2)
-            Xs,Ys,Zs,Os,Ps,Ks = cal_gps(data_time[Ns][0],a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8],a[9],a[10],a[11],a[12],a[13],a[14],a[15],a[16],a[17])
             #起点行外方位元素
-            X_,Y_,Z_,O_,P_,K_ = cal_gps(data_time[N_][0],a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8],a[9],a[10],a[11],a[12],a[13],a[14],a[15],a[16],a[17])
+            Xs,Ys,Zs,Os,Ps,Ks = cal_gps(data_time[Ns][0],a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8],a[9],a[10],a[11],a[12],a[13],a[14],a[15],a[16],a[17])
             #中间行外方位元素
-            Xe,Ye,Ze,Oe,Pe,Ke = cal_gps(data_time[Ne][0],a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8],a[9],a[10],a[11],a[12],a[13],a[14],a[15],a[16],a[17])
+            X_,Y_,Z_,O_,P_,K_ = cal_gps(data_time[N_][0],a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8],a[9],a[10],a[11],a[12],a[13],a[14],a[15],a[16],a[17])
             #终点行外方位元素
+            Xe,Ye,Ze,Oe,Pe,Ke = cal_gps(data_time[Ne][0],a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8],a[9],a[10],a[11],a[12],a[13],a[14],a[15],a[16],a[17])
+            
             qs = interpolation_q(data_att,data_time[Ns][0])
             q_ = interpolation_q(data_att,data_time[N_][0])
             qe = interpolation_q(data_att,data_time[Ne][0])
-
+            #四元数得到的矩阵
             Rs = q2rotate(qs[0],qs[1],qs[2],qs[3])
             R_ = q2rotate(q_[0],q_[1],q_[2],q_[3])
             Re = q2rotate(qe[0],qe[1],qe[2],qe[3])
-
+            #j2000->wgs84矩阵
+            RsJ = linear_angle(data_time[Ns][0],r_para)
+            R_J = linear_angle(data_time[N_][0],r_para)
+            ReJ = linear_angle(data_time[Ne][0],r_para)
+            #求逆
+            Rs = np.linalg.inv(np.dot(Rs,RsJ))
+            R_ = np.linalg.inv(np.dot(R_,R_J))
+            Re = np.linalg.inv(np.dot(Re,ReJ))
+            #计算像点坐标
             xs,ys = cal_ptopts(Rs,X,Y,Z,Xs,Ys,Zs)
             x_,y_ = cal_ptopts(R_,X,Y,Z,X_,Y_,Z_)
             xe,ye = cal_ptopts(Re,X,Y,Z,Xe,Ye,Ze)
 
-            # print(xs,x_,xe,Ns,Ne) 
+            print(xs,ys,Ns) 
             
             #判断条件有误
             if (xs*x_<=0):
@@ -398,18 +498,23 @@ def dicho_iter(data,a):
                 Ns = int((Ns+N_)/2)
                 Ne = int((Ne+N_)/2)
 
-            if int(Ne-Ns)<20:
+            # if int(Ne-Ns)<20:
+            if abs(x_)<0.003:
                 iteration = False
-                NNS.append(Ns)
-                NNE.append(Ne)
+                NNX.append(int(N_))
+                NNY.append(int(y_))
+            elif Ns == Ne:
+                iteration = False
+                NNX.append(int(N_))
+                NNY.append(int(y_))
             else:
                 iteration = True
                 continue
   
-    return NNS,NNE
+    return NNX,NNY
 
 ###############################################################back
-#反投影
+#反投影#好像不需要了
 def bk_pro(data,a,NNS,NNE):
     num = data.__len__()
     data_type = data[0].__len__()
@@ -502,8 +607,9 @@ def plt_test():
 if __name__ == "__main__":
     num = data_XYZ.__len__()
     a = interpolation_gps(data_gps)#扫描行外方位元素 系数
-    NNS,NNE = dicho_iter(data_XYZ,a)#二分法得到的 行区间范围
-    x,y = bk_pro(data_XYZ,a,NNS,NNE)#像方点计算
+    r_para = angle_para()#旋转矩阵线性内插系数
+    x,y = dicho_iter(data_XYZ,a,r_para)#二分法得到的 行区间范围
+    # x,y = bk_pro(data_XYZ,a,NNS,NNE)#像方点计算
     
     for i in range(num):
         print('the feature coordinate===>')
@@ -513,4 +619,6 @@ if __name__ == "__main__":
         print('Z:'+str(data_XYZ[i][2]))
         print('x:'+str(x[i]))
         print('y:'+str(y[i]))
+
+    
     pass
