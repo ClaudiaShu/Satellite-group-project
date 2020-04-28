@@ -31,3 +31,15 @@ def q_interpolation(att1, att2, t, flag=0):  # 用读取的四元数数据（包
     y0 = sin(theta*(t1-t)/(t1-t0))/sin(theta)
     y1 = sin(theta*(t-t0)/(t1-t0))/sin(theta)
     return y0*q0+y1*q1
+
+
+def linear_interpolation(data, t):  # 输入数据组[(t,data1,data2,...),...]
+    data = array(data)
+    lens = len(data)
+    if t < data[0, 0]:
+        return [0, 0, 0]
+    for i in range(lens):
+        if t < data[i, 0]:
+            return data[i-1, 1:]+(data[i, 1:]-data[i-1, 1:])\
+                   * (data[i, 0]-t)/(data[i, 0]-data[i-1, 0])
+    return [0, 0, 0]
