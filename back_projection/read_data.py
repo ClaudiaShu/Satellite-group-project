@@ -89,34 +89,52 @@ def read_cbr(filename="./data/NAD.cbr"):
     f.close()
     return data
 
+#get rotation matrix from J2000 to WGS84
+def read_J2W(filename="./data/J2WGS.txt"):
+    f = open(filename, 'r')
+    time = []
+    R = []
+
+    for lines in f:
+        timeCode = float(lines.split(' ')[2])
+        r = np.zeros((3,3))
+        line = f.readline()
+        r[0][0] = float(line.split('\t')[0])
+        r[0][1] = float(line.split('\t')[1])
+        r[0][2] = float(line.split('\t')[2])
+        line = f.readline()
+        r[1][0] = float(line.split('\t')[0])
+        r[1][1] = float(line.split('\t')[1])
+        r[1][2] = float(line.split('\t')[2])
+        line = f.readline()
+        r[2][0] = float(line.split('\t')[0])
+        r[2][1] = float(line.split('\t')[1])
+        r[2][2] = float(line.split('\t')[2])
+
+        time.append(timeCode)
+        R.append(r)
+    T = np.zeros(4)
+    for i in range(4):
+        T[i] = time[i]
+
+    f.close()
+    return T,R
+
 #获得像点坐标 读取DEM tiff文件
 def get_XYZ(filename="./data/SRTM_mosaic.tif"):
-    img = cv2.imread(filename)
-    # print(img.shape)
-    # print(img.dtype)
-
-    # tif = TIFF.open(filename,mode='r')
-    # lons = 100
-    # lone = 137
-    # lats = 15
-    # late = 52
-    # lons_grid = int((lons+180.0)/(30.0/3600))
-    # lone_grid = int((lone+180.0)/(30.0/3600))
-    # lats_grid = int((75.0-lats)/(30.0/3600))
-    # late_grid = int((75.0-late)/(30.0/3600))
-    # img2 = img[late_grid:lats_grid,lons_grid:lone_grid]
-    # cv2.namedWindow('img')
-    # cv2.imshow('img',img2)
-    # cv2.waitKey(0)
-
+    # img = cv2.imread(filename)
 
     #####test data######
     data = []
-    data.append([234.0,34.0,675.0])
-    data.append([345.0,54.0,597.0])
+    data.append([1934303.0,743483.0,5297.0])
+    data.append([2343434.0,798337.0,675.0])
+    data.append([0.0,0.0,0.0])
+
+
 
     return data
 
 if __name__ == "__main__":
     # get_XYZ()
+    # read_J2W()
     pass
