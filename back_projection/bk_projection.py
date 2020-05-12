@@ -16,6 +16,10 @@ from scipy.optimize import leastsq
 #8192*5378
 rows = 8192
 cols = 5378
+wgs84_a = 6378137
+wgs84_f = 1 / 298.257223563
+wgs84_b = wgs84_a - wgs84_f * wgs84_a
+wgs84_e2 = (wgs84_a * wgs84_a - wgs84_b * wgs84_b) / (wgs84_a * wgs84_a)
 ######config######################
 #四元数数据
 print('getting quaternion data')
@@ -81,12 +85,12 @@ def cal_b3(phi, omega, kappa):
     # pass
 
 def cal_c1(phi, omega, kappa):
-    c1 = math.sin(phi)*math.cos(kappa)-math.cos(phi)*math.sin(omega)*math.sin(kappa)
+    c1 = math.sin(phi)*math.cos(kappa)+math.cos(phi)*math.sin(omega)*math.sin(kappa)
     return c1
     # pass
 
 def cal_c2(phi, omega, kappa):
-    c2 = -math.sin(phi)*math.sin(kappa)-math.cos(phi)*math.sin(omega)*math.cos(kappa)
+    c2 = -math.sin(phi)*math.sin(kappa)+math.cos(phi)*math.sin(omega)*math.cos(kappa)
     return c2
     # pass
 
@@ -178,7 +182,7 @@ def cal_gps(time,a0,a1,a2,b0,b1,b2,c0,c1,c2,d0,d1,d2,e0,e1,e2,f0,f1,f2):
     
     X = a0+a1*time+a2*pow(time,2)
     Y = b0+b1*time+b2*pow(time,2)
-    Z = c0+c2*time+c2*pow(time,2)
+    Z = c0+c1*time+c2*pow(time,2)
     O = d0+d1*time+d2*pow(time,2)#omega
     P = e0+e1*time+e2*pow(time,2)#phi
     K = f0+f1*time+f2*pow(time,2)#kappa
@@ -186,7 +190,7 @@ def cal_gps(time,a0,a1,a2,b0,b1,b2,c0,c1,c2,d0,d1,d2,e0,e1,e2,f0,f1,f2):
     return X,Y,Z,O,P,K
 
 #计算旋转矩阵
-def cal_para(omega,phi,kappa):
+def cal_para(phi,omega,kappa):
     a1 = cal_a1(phi, omega, kappa)
     a2 = cal_a2(phi, omega, kappa)
     a3 = cal_a3(phi, omega, kappa)
@@ -226,14 +230,23 @@ def q2rotate(q1, q2, q3, q4):
     dara[3]: q3
     data[4]: q4
     '''
+    # a1 = 1-2*(pow(q2,2)+pow(q3,2))
+    # a2 = 2*(q1*q2-q3*q4)
+    # a3 = 2*(q1*q3+q2*q4)
+    # b1 = 2*(q1*q2+q3*q4)
+    # b2 = 1-2*(pow(q1,2)+pow(q3,2))
+    # b3 = 2*(q2*q3-q1*q4)
+    # c1 = 2*(q1*q3-q2*q4)
+    # c2 = 2*(q2*q3+q1*q4)
+    # c3 = 1-2*(pow(q2,2)+pow(q2,2))
     a1 = 1-2*(pow(q2,2)+pow(q3,2))
-    a2 = 2*(q1*q2-q3*q4)
-    a3 = 2*(q1*q3+q2*q4)
-    b1 = 2*(q1*q2+q3*q4)
+    a2 = 2*(q1*q2+q3*q4)
+    a3 = 2*(q1*q3-q2*q4)
+    b1 = 2*(q1*q2-q3*q4)
     b2 = 1-2*(pow(q1,2)+pow(q3,2))
-    b3 = 2*(q2*q3-q1*q4)
-    c1 = 2*(q1*q3-q2*q4)
-    c2 = 2*(q2*q3+q1*q4)
+    b3 = 2*(q2*q3+q1*q4)
+    c1 = 2*(q1*q3+q2*q4)
+    c2 = 2*(q2*q3-q1*q4)
     c3 = 1-2*(pow(q2,2)+pow(q2,2))
     R = np.array([[a1, a2, a3], [b1, b2, b3], [c1, c2, c3]])
     return R
@@ -447,13 +460,16 @@ def dicho_iter(data,a,r_para):
     ZZ = get_array(data,2)#物方Z
     NNX = []
     NNY = []
+    
     iteration = True
     for i in range(0,num):
         print('====================================')
         X = XX[i]
         Y = YY[i]
         Z = ZZ[i]
+
         Ns = 0
+
         Ne = cols-2
         iteration = True
 
@@ -482,12 +498,14 @@ def dicho_iter(data,a,r_para):
             Rs = np.linalg.inv(np.dot(Rs,RsJ))
             R_ = np.linalg.inv(np.dot(R_,R_J))
             Re = np.linalg.inv(np.dot(Re,ReJ))
+            # Rs = (np.dot(Rs,RsJ))
+            # R_ = (np.dot(R_,R_J))
+            # Re = (np.dot(Re,ReJ))
             #计算像点坐标
             xs,ys = cal_ptopts(Rs,X,Y,Z,Xs,Ys,Zs)
             x_,y_ = cal_ptopts(R_,X,Y,Z,X_,Y_,Z_)
             xe,ye = cal_ptopts(Re,X,Y,Z,Xe,Ye,Ze)
-
-            print(xs,ys,Ns) 
+            # print(N_,x_)
             
             #判断条件有误
             if (xs*x_<=0):
@@ -499,7 +517,7 @@ def dicho_iter(data,a,r_para):
                 Ne = int((Ne+N_)/2)
 
             # if int(Ne-Ns)<20:
-            if abs(x_)<0.003:
+            if abs(x_)<0.03:
                 iteration = False
                 NNX.append(int(N_))
                 NNY.append(int(y_))
@@ -512,6 +530,57 @@ def dicho_iter(data,a,r_para):
                 continue
   
     return NNX,NNY
+
+def XYZ2BLH(data):
+    num = data.__len__()
+    data_type = data[0].__len__()
+    # print(num)    
+    XX = get_array(data,0)#物方X
+    YY = get_array(data,1)#物方Y
+    ZZ = get_array(data,2)#物方Z
+    BB = []
+    LL = []
+    HH = []
+    
+    iteration = True
+    for i in range(0,num):
+        print('====================================')
+        X = XX[i]
+        Y = YY[i]
+        Z = ZZ[i]
+
+        H = 0
+        dH = 0
+        B = 0
+        L = 0
+        count = 0
+        iteration = True
+
+        while iteration == True:
+            count = count+1
+            W = pow(1-wgs84_e2*pow(math.sin(B),2),0.5)
+            N = wgs84_a/W
+            H = H+dH
+            B = math.atan(Z*(N+H)/(pow(X*X+Y*Y,0.5)*(N*(1-wgs84_e2)+H)))
+            L = math.atan(Y/X)
+            if Y>0:
+                if L<0:
+                    L = L+math.pi
+            else:
+                if L>0:
+                    L = L-math.pi
+            dH = pow(X*X+Y*Y,0.5)/math.cos(B)-N-H
+            if abs(dH)<0.00000001:
+                H = H+dH
+                iteration = False
+            if count>20:
+                iteration = False
+        
+        BB.append(B)
+        LL.append(L)
+        HH.append(H)
+        print(B,L,H)
+    return B,L,H
 
 ###############################################################back
 #反投影#好像不需要了
@@ -609,11 +678,12 @@ if __name__ == "__main__":
     a = interpolation_gps(data_gps)#扫描行外方位元素 系数
     r_para = angle_para()#旋转矩阵线性内插系数
     x,y = dicho_iter(data_XYZ,a,r_para)#二分法得到的 行区间范围
+    B,L,H = XYZ2BLH(data_XYZ)
     # x,y = bk_pro(data_XYZ,a,NNS,NNE)#像方点计算
     
     for i in range(num):
         print('the feature coordinate===>')
-        print('this is the %d point',i)
+        print('this is the %d point',i+1)
         print('X:'+str(data_XYZ[i][0]))
         print('Y:'+str(data_XYZ[i][1]))
         print('Z:'+str(data_XYZ[i][2]))
