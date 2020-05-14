@@ -208,12 +208,17 @@ def cal_para(phi,omega,kappa):
 
 #计算像方点
 def cal_ptopts(R,X,Y,Z,Xs,Ys,Zs):
+
+    # R = R.transpose()
     XX = cal_X(R[0][0],R[1][0],R[2][0],X,Xs,Y,Ys,Z,Zs)
     YY = cal_Y(R[0][1],R[1][1],R[2][1],X,Xs,Y,Ys,Z,Zs)
     ZZ = cal_Z(R[0][2],R[1][2],R[2][2],X,Xs,Y,Ys,Z,Zs)
 
     x = -F*XX/ZZ
     y = -F*YY/ZZ
+
+    print(x,y)
+    # print(XX,YY,ZZ)
 
     return x,y
 
@@ -229,7 +234,7 @@ def q2rotate(q1, q2, q3, q4):
     dara[3]: q3
     data[4]: q4
     '''
-
+    #check
     a1 = 1-2*(pow(q2,2)+pow(q3,2))
     a2 = 2*(q1*q2-q3*q4)
     a3 = 2*(q1*q3+q2*q4)
@@ -272,7 +277,6 @@ def R2A(R) :
     #     z = 0
 
     return np.array([phi, omega, kappa])
-
 
 ###############################################################fitting
 
@@ -341,6 +345,7 @@ def fitting_poly(X, Y):
     Para = leastsq(error, p0, args=(X, Y))
     return Para
 
+#内插
 def fitting_poly_sin(X, Y):
     p0 = [10, 10]
     Para = leastsq(error_sin, p0, args=(X, Y))
@@ -389,6 +394,7 @@ def interpolation_gps(data):
 #四元数内插计算（本体到J2000）
 def interpolation_q(data,time):
     front,back = get_i(time,0,data_att)#得到前一项和后一项的行号
+    # print(time,front,back)
 
     t0 = data[front][0]
     t1 = data[back][0]
@@ -409,6 +415,7 @@ def interpolation_q(data,time):
 
     return qt
 
+#XYZ内插计算
 def InterpXYZ(time, data, timeCodes):
     n = 0
     # timeCodes = get_array(data,0)
@@ -426,6 +433,7 @@ def InterpXYZ(time, data, timeCodes):
         s += data[j + n] * p1 / p2
     return s.reshape((1,3))
 
+#J2000到WGS84旋转矩阵内插
 def InterpRmats(time, Rmats, timeCodes):
     i = 0
     for i in range(len(timeCodes)):
@@ -437,6 +445,7 @@ def InterpRmats(time, Rmats, timeCodes):
                 timeCodes[i + 1] - timeCodes[i]) * R2
     return R
 
+#角度内插参数
 def angle_para():
     angle = []
     for i in range(num_J2W):
@@ -459,6 +468,7 @@ def angle_para():
 
     return (k1,b1,k2,b2,k3,b3)
 
+#角度内插
 def linear_angle(time,r_para):
     phi = r_para[0]*time+r_para[1]
     omega = r_para[2]*time+r_para[3]
@@ -468,11 +478,23 @@ def linear_angle(time,r_para):
     
     return R
 
+def search_y(dy):
+    min_dy = 9999
+    old_dy = 9999
+    y = 9999
+    for i in range(len(data_cbr)):
+        check_y = data_cbr[i][0]
+        min_dy = abs(check_y-dy)
+        if min_dy < old_dy:
+            old_dy = min_dy
+            y=i
+    return y
+
 ###############################################################dicho
 #二分法迭代求解搜索窗口范围
 #搜索出的结果仅为窗口范围，减小搜索区间，并不是最终确认的扫描行
 #判断迭代终止的条件：确定该扫描行的外方位元素满足m11*(X-XS)+m12*(Y-YS)+m13*(Z-ZS)=0
-def dicho_iter(data,r_para):
+def dicho_iter(data):
     num = data.__len__()
     data_type = data[0].__len__()
     # print(num)    
@@ -489,49 +511,67 @@ def dicho_iter(data,r_para):
         Y = YY[i]
         Z = ZZ[i]
         Ns = 0
-        Ne = cols-2
+        Ne = cols-1
         iteration = True
 
         while iteration == True:
             # print('iteration')
             N_ = int((Ns+Ne)/2)
+            # print(Ns,N_,Ne)
             #check
             # #起点行外方位元素
-            # Xs,Ys,Zs = cal_gps(data_time[Ns],a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8])
             XYZs = InterpXYZ(data_time[Ns],gpsmat,t_gps)
             # #中间行外方位元素
-            # X_,Y_,Z_ = cal_gps(data_time[N_],a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8])
             XYZ_ = InterpXYZ(data_time[N_],gpsmat,t_gps)
             # #终点行外方位元素
-            # Xe,Ye,Ze = cal_gps(data_time[Ne],a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8])
             XYZe = InterpXYZ(data_time[Ne],gpsmat,t_gps)
+            # print(XYZs[0],'\n',XYZ_[0],'\n',XYZe[0])
 
+            #check
+            #四元数内插
             qs = interpolation_q(data_att,data_time[Ns])
             q_ = interpolation_q(data_att,data_time[N_])
             qe = interpolation_q(data_att,data_time[Ne])
-            #四元数得到的矩阵
+            # print(qs,q_,qe)
+            #四元数得到的矩阵 本体->J2000
             Rs = q2rotate(qs[0],qs[1],qs[2],qs[3])
             R_ = q2rotate(q_[0],q_[1],q_[2],q_[3])
             Re = q2rotate(qe[0],qe[1],qe[2],qe[3])
+            # print(Rs,'\n',R_,'\n',Re)
+
             #j2000->wgs84矩阵 check
-            # RsJ = linear_angle(data_time[Ns],r_para).T            
-            # R_J = linear_angle(data_time[N_],r_para).T            
-            # ReJ = linear_angle(data_time[Ne],r_para).T
+            #Celestial coordinates ( X Y Z) = M x Terrestrial coordinates ( x y z ) 
             RsJ = InterpRmats(data_time[Ns],rmat,r_time).T
             R_J = InterpRmats(data_time[N_],rmat,r_time).T
             ReJ = InterpRmats(data_time[Ne],rmat,r_time).T
+            # RsJ = InterpRmats(data_time[Ns],rmat,r_time)
+            # R_J = InterpRmats(data_time[N_],rmat,r_time)
+            # ReJ = InterpRmats(data_time[Ne],rmat,r_time)
+            
+            # print(RsJ,'\n',R_J,'\n',ReJ)
+
+            #正投影矩阵
+            Rots = np.dot(RsJ,Rs)
+            Rot_ = np.dot(R_J,R_)
+            Rote = np.dot(ReJ,Re)
+            # Rots = np.dot(Rs,RsJ)
+            # Rot_ = np.dot(R_,R_J)
+            # Rote = np.dot(Re,ReJ)
+
             #求逆 check
-            Rs = np.linalg.inv(np.dot(Rs,RsJ))
-            R_ = np.linalg.inv(np.dot(R_,R_J))
-            Re = np.linalg.inv(np.dot(Re,ReJ))
-            # Rs = (np.dot(Rs,RsJ)).T
-            # R_ = (np.dot(R_,R_J)).T
-            # Re = (np.dot(Re,ReJ)).T
-            #计算像点坐标
-            xs,ys = cal_ptopts(Rs,X,Y,Z,XYZs[0,0],XYZs[0,1],XYZs[0,2])
-            x_,y_ = cal_ptopts(R_,X,Y,Z,XYZ_[0,0],XYZ_[0,1],XYZ_[0,2])
-            xe,ye = cal_ptopts(Re,X,Y,Z,XYZe[0,0],XYZe[0,1],XYZe[0,2])
-            print(xs,x_,xe)
+            RRs = np.linalg.inv(Rots)
+            RR_ = np.linalg.inv(Rot_)
+            RRe = np.linalg.inv(Rote)
+            # Rs = (Rots)
+            # R_ = (Rot_)
+            # Re = (Rote)
+
+            #计算像点
+            xs,ys = cal_ptopts(RRs,X,Y,Z,XYZs[0,0],XYZs[0,1],XYZs[0,2])
+            x_,y_ = cal_ptopts(RR_,X,Y,Z,XYZ_[0,0],XYZ_[0,1],XYZ_[0,2])
+            xe,ye = cal_ptopts(RRe,X,Y,Z,XYZe[0,0],XYZe[0,1],XYZe[0,2])
+            # print(xs,x_,xe)
+            print(RRs,'\n',RR_,'\n',RRe)
 
             if xs<0 and x_<0 and xe<0:
                 iteration = False
@@ -550,18 +590,18 @@ def dicho_iter(data,r_para):
                     Ns = int((Ns+N_)/2)
                     Ne = int((Ne+N_)/2)
 
-                # if int(Ne-Ns)<20:
-                if abs(x_)<0.03:
+                if abs(Ne-Ns)<=1:
                     iteration = False
                     NNX.append(int(N_))
-                    NNY.append(int(y_))
+                    NNY.append(int(search_y(y_)))
                 elif Ns == Ne:
                     iteration = False
                     NNX.append(int(N_))
-                    NNY.append(int(y_))
+                    NNY.append(int(search_y(y_)))
                 else:
                     iteration = True
                     continue
+
   
     return NNX,NNY
 
@@ -616,44 +656,32 @@ def XYZ2BLH(data):
         # print(B,L,H)
     return B,L,H
 
-###############################################################back
-#反投影#好像不需要了
-def bk_pro(data,a,NNS,NNE):
+def BLH2XYZ(data):
     num = data.__len__()
     data_type = data[0].__len__()
-    # print(num)
-    XX = get_array(data,0)#物方X
-    YY = get_array(data,1)#物方Y
-    ZZ = get_array(data,2)#物方Z
-    x = []
-    y = []
+    # print(num)    
+    BB = get_array(data,0)
+    LL = get_array(data,1)
+    HH = get_array(data,2)
 
-    iteration = True
+    data = []
+
     for i in range(0,num):
-        X = XX[i]
-        Y = YY[i]
-        Z = ZZ[i]
-        N_ = NNS[i]
-        Ne = NNE[i]
-        iteration = True
-        while iteration:
+        print('====================================')
+        B = BB[i]
+        L = LL[i]
+        H = HH[i]
 
-            X_,Y_,Z_,O_,P_,K_ = cal_gps(data_time[N_],a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8],a[9],a[10],a[11],a[12],a[13],a[14],a[15],a[16],a[17])
-            q_ = interpolation_q(data_att,data_time[N_])
-            R_ = q2rotate(q_[0],q_[1],q_[2],q_[3])
-            x_,y_ = cal_ptopts(R_,X,Y,Z,X_,Y_,Z_)
-            # print(abs(x_),y_,N_,Ne)
+        W = pow(1-wgs84_e2*pow(math.sin(B),2),0.5)
+        N = wgs84_a / W
 
-            if abs(x_)<0.003 or N_==Ne:
-                iteration = False
-                x.append(int(N_))
-                y.append(int(y_))
-            else:
-                iteration = True
-                N_ = N_+1
-                continue
+        X=(N+H)*math.cos(B)*math.cos(L)
+        Y=(N+H)*math.cos(B)*math.sin(L)
+        Z=(N*(1-wgs84_e2)+H)*math.sin(B)
 
-    return x,y
+        data.append([X,Y,Z])
+
+    return data
 
 ###############################################################test
 #测试航带走向
@@ -709,11 +737,8 @@ def plt_test():
 
 if __name__ == "__main__":
     num = data_XYZ.__len__()
-    # a = interpolation_gps(data_gps)#扫描行外方位元素 系数
-    r_para = angle_para()#旋转矩阵线性内插系数
-    x,y = dicho_iter(data_XYZ,r_para)#二分法得到的 行区间范围
-    # B,L,H = XYZ2BLH(data_XYZ)
-    # x,y = bk_pro(data_XYZ,a,NNS,NNE)#像方点计算
+    # data_xyz = BLH2XYZ(data_XYZ)
+    x,y = dicho_iter(data_XYZ)#二分法得到的 行区间范围
     
     for i in range(num):
         print('the feature coordinate===>')
@@ -726,12 +751,15 @@ if __name__ == "__main__":
     
     ####################################
 
-    # XYZ = InterpXYZ(131862405.08331299,gpsmat,t_gps)
-    # X_,Y_,Z_ = cal_gps(131862405.08331299,a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8])
+    
+    # a = interpolation_gps(data_gps)
+    # XYZ = InterpXYZ(131862419.00001526,gpsmat,t_gps)
+    # X_,Y_,Z_ = cal_gps(131862419.00001526,a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8])#bandon
     # print(XYZ,X_,Y_,Z_)
 
-    # R = InterpRmats(131862407.08331,rmat,r_time)
-    # R_ = linear_angle(131862407.08331,r_para)
-    # print(R,R_)    
+    # r_para = angle_para()#旋转矩阵线性内插系数
+    # R = InterpRmats(131862406,rmat,r_time)
+    # R_ = linear_angle(131862406,r_para)
+    # print(R,'\n',R_)    
     
     pass
