@@ -45,16 +45,12 @@ print('getting look angle')
 data_cbr = read_data.read_cbr()
 num_cbr = data_cbr.__len__()
 cbr_type = data_cbr[0].__len__()
-# 物点数据
-print('grtting control points')
-data_XYZ = read_data.get_XYZ()
-num_XYZ = data_XYZ.__len__()
-XYZ_type = data_XYZ[0].__len__()
 # J2000到WGS84旋转矩阵
 print('getting rotation angle')
 r_time, data_J2W, rmat = read_data.read_J2W()
 num_J2W = data_J2W.__len__()
-
+# 相机到卫星本体的姿态关系
+data_nad = read_data.read_nad()
 
 ######algorithm###################
 
@@ -207,19 +203,6 @@ def cal_a26(x, x0):
     # pass
 
 
-# 已解求外方位元素方程
-# 带入时间返回外方位元素
-def cal_gps(time, a0, a1, a2, b0, b1, b2, c0, c1, c2):
-    X = a0 + a1 * time + a2 * pow(time, 2)
-    Y = b0 + b1 * time + b2 * pow(time, 2)
-    Z = c0 + c1 * time + c2 * pow(time, 2)
-    # O = d0+d1*time+d2*pow(time,2)#omega
-    # P = e0+e1*time+e2*pow(time,2)#phi
-    # K = f0+f1*time+f2*pow(time,2)#kappa
-
-    return X, Y, Z
-
-
 # 计算旋转矩阵
 def cal_para(phi, omega, kappa):
     a1 = cal_a1(phi, omega, kappa)
@@ -237,18 +220,6 @@ def cal_para(phi, omega, kappa):
     R = np.array([[a1, a2, a3], [b1, b2, b3], [c1, c2, c3]])
 
     return R
-
-
-# 计算像方点
-def cal_ptopts(R, X, Y, Z, Xs, Ys, Zs):
-    XX = cal_X(R[0][0], R[1][0], R[2][0], X, Xs, Y, Ys, Z, Zs)
-    YY = cal_Y(R[0][1], R[1][1], R[2][1], X, Xs, Y, Ys, Z, Zs)
-    ZZ = cal_Z(R[0][2], R[1][2], R[2][2], X, Xs, Y, Ys, Z, Zs)
-
-    x = -F * XX / ZZ
-    y = -F * YY / ZZ
-
-    return x, y
 
 
 # 四元数转换为旋转矩阵
@@ -326,8 +297,6 @@ def R2A(R):
     return np.array([phi, omega, kappa])
 
 
-###############################################################fitting
-
 # 找到前后元素
 def get_i(time, index, data):
     num = data.__len__()
@@ -369,82 +338,6 @@ def get_array(data, index):
     for i in range(num):
         final_array[i] = data[i][index]
     return final_array
-
-
-# 二次函数的标准形式
-def func(params, x):
-    a, b, c = params
-    return a * x * x + b * x + c
-
-
-# 误差函数，即拟合曲线所求的值与实际值的差
-def error(params, x, y):
-    return func(params, x) - y
-
-
-# 一次函数的标准形式
-def func_sin(params, x):
-    k, b = params
-    return k * x + b
-
-
-# 一次误差函数
-def error_sin(params, x, y):
-    return func_sin(params, x) - y
-
-
-# 对参数求解
-def fitting_poly(X, Y):
-    p0 = [10, 10, 10]
-    Para = leastsq(error, p0, args=(X, Y))
-    return Para
-
-
-def fitting_poly_sin(X, Y):
-    p0 = [10, 10]
-    Para = leastsq(error_sin, p0, args=(X, Y))
-    return Para
-
-
-# gps数据内插计算
-def interpolation_gps(data):
-    '''
-    data为data_gps
-    data[0]: time
-    data[1]: X
-    data[2]: Y
-    data[3]: Z
-    data[4]: O
-    data[5]: P
-    data[6]: K
-    '''
-    time = get_array(data, 0)
-    x = get_array(data, 1)
-    y = get_array(data, 2)
-    z = get_array(data, 3)
-    # o = get_array(data,4)
-    # p = get_array(data,5)
-    # k = get_array(data,6)
-
-    # 求得a0-f2的数据
-    a2, a1, a0 = fitting_poly(time, x)[0]
-    b2, b1, b0 = fitting_poly(time, y)[0]
-    c2, c1, c0 = fitting_poly(time, z)[0]
-    # d2,d1,d0 = fitting_poly(time,o)[0]
-    # e2,e1,e0 = fitting_poly(time,p)[0]
-    # f2,f1,f0 = fitting_poly(time,k)[0]
-
-    # 作图验证部分
-    # plt.figure(figsize=(8,6))
-    # plt.scatter(time, x, color="green", label="sample data", linewidth=2)
-
-    # X=np.linspace(0,100,100) ##在0-15直接画100个连续点
-    # Y=a2*X*X+a1*X+a0 ##函数式
-    # plt.plot(X,Y,color="red",label="solution line",linewidth=2)
-    # plt.legend() #绘制图例
-    # plt.show()
-
-    return (a0, a1, a2, b0, b1, b2, c0, c1, c2)
 
 
 # 四元数内插计算（本体到J2000）
@@ -518,39 +411,7 @@ def InterpRmats(time, Rmats, timeCodes):
     return R
 
 
-def angle_para():
-    angle = []
-    for i in range(num_J2W):
-        angle.append(R2A(data_J2W[i]))
-        # print(angle)
-
-    # print(angle)
-    phi = get_array(angle, 0)
-    omega = get_array(angle, 1)
-    kappa = get_array(angle, 2)
-
-    # print(phi)
-    # print(omega)
-    # print(kappa)
-
-    k1, b1 = fitting_poly_sin(r_time, phi)[0]
-    k2, b2 = fitting_poly_sin(r_time, omega)[0]
-    k3, b3 = fitting_poly_sin(r_time, kappa)[0]
-    # print(k1,b1,k2,b2,k3,b3)
-
-    return (k1, b1, k2, b2, k3, b3)
-
-
-def linear_angle(time, r_para):
-    phi = r_para[0] * time + r_para[1]
-    omega = r_para[2] * time + r_para[3]
-    kappa = r_para[4] * time + r_para[5]
-    # print(phi,omega,kappa)
-    R = cal_para(phi, omega, kappa)
-
-    return R
-
-
+# WGS84坐标转J2000？
 def XYZ2BLH(data):
     num = data.__len__()
     data_type = data[0].__len__()
@@ -615,11 +476,13 @@ def virt_grid(hei, wid, layers):
             im_time = data_time[grid_x[li, lj]]
             im_cbr = data_cbr[lj]
             im_gps = InterpXYZ(im_time, gpsmat, t_gps)
+            R_c2b = cal_para(data_nad[0],data_nad[2],data_nad[4])
             R_j2w = InterpRmats(im_time, rmat, r_time)
             q = interpolation_q(data_att, im_time)
             R_b2j = q2rotate(q[0], q[1], q[2], q[3])
             im_cbr = np.array(im_cbr).transpose()
             u = np.dot(R_j2w, R_b2j)
+            u = np.dot(u, R_c2b)
             u = np.dot(u, im_cbr)
             im_gps = np.array(im_gps)
             for lk in range(layers):
