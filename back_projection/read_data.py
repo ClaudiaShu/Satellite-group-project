@@ -99,7 +99,7 @@ def read_cbr(filename="./data/NAD.cbr"):
         data.append([x, y, 1])
 
     f.close()
-    # print(data,data.__len__())
+    # print(data)
     return data
 
 #get rotation matrix from J2000 to WGS84
@@ -140,15 +140,20 @@ def read_J2W(filename="./data/J2WGS.txt"):
     return T,R,rmat
 
 #获得像点坐标 读取DEM tiff文件
-def get_XYZ(filename="./data/SRTM_mosaic.tif"):
+def get_XYZ(filename="./data/check.txt"):
     # img = cv2.imread(filename)
 
     #####test data######
     data = []
-    data.append([-2282126.083,5054348.290,3142026.214])
-    data.append([-2214395.2, 5882759.5, 2780867.2])
-    data.append([-2377798.3431889759,5161197.8955926420,1083479.4051405331])
-
+    f = open(filename, 'r')
+    data = []
+    for lines in f:
+        x = float(lines.split('\t')[0])
+        y = float(lines.split('\t')[1])
+        z = float(lines.split('\t')[2])
+        data.append([x,y,z])
+    # print(data)
+    f.close()
     return data
 
 if __name__ == "__main__":
