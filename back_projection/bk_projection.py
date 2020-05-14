@@ -440,9 +440,24 @@ def InterpRmats(time, Rmats, timeCodes):
         if time - timeCodes[i] >= 0 and time - timeCodes[i + 1] < 0:
             break
     R1 = Rmats[3 * i:3 * i + 3]
+    q0 = rotate2q(R1)
     R2 = Rmats[3 * i + 3:3 * i + 6]
-    R = (time - timeCodes[i]) / (timeCodes[i + 1] - timeCodes[i]) * R1 + (timeCodes[i + 1] - time) / (
-                timeCodes[i + 1] - timeCodes[i]) * R2
+    q1 = rotate2q(R2)
+
+    q0_ = q0.reshape(1, 4)
+    q1_ = q1.reshape(4, 1)
+
+    q0q1 = float(np.dot(q0_, q1_))
+    theta = math.acos(q0q1)
+    miu0 = math.sin(theta * (timeCodes[i + 1] - time) / (timeCodes[i + 1] - timeCodes[i])) / math.sin(theta)
+    miu1 = math.sin(theta * (time - timeCodes[i]) / (timeCodes[i + 1] - timeCodes[i])) / math.sin(theta)
+
+    qt = miu0 * q0 + miu1 * q1
+
+    R = q2rotate(qt[0], qt[1], qt[2], qt[3])
+
+    # R = (time - timeCodes[i]) / (timeCodes[i + 1] - timeCodes[i]) * R1 + (timeCodes[i + 1] - time) / (
+    #             timeCodes[i + 1] - timeCodes[i]) * R2
     return R
 
 #角度内插参数
