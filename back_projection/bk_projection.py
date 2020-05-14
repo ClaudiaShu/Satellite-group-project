@@ -5,7 +5,7 @@ import math
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-import tensorflow as tf
+# import tensorflow as tf
 import scipy
 from scipy.optimize import leastsq
 
@@ -209,7 +209,7 @@ def cal_para(phi,omega,kappa):
 #计算像方点
 def cal_ptopts(R,X,Y,Z,Xs,Ys,Zs):
 
-    # R = R.transpose()
+    R = R.transpose()
     XX = cal_X(R[0][0],R[1][0],R[2][0],X,Xs,Y,Ys,Z,Zs)
     YY = cal_Y(R[0][1],R[1][1],R[2][1],X,Xs,Y,Ys,Z,Zs)
     ZZ = cal_Z(R[0][2],R[1][2],R[2][2],X,Xs,Y,Ys,Z,Zs)
@@ -217,7 +217,8 @@ def cal_ptopts(R,X,Y,Z,Xs,Ys,Zs):
     x = -F*XX/ZZ
     y = -F*YY/ZZ
 
-    print(x,y)
+    # print(x,y)
+    # print('\n')
     # print(XX,YY,ZZ)
 
     return x,y
@@ -245,6 +246,7 @@ def q2rotate(q1, q2, q3, q4):
     c2 = 2*(q2*q3+q1*q4)
     c3 = 1-2*(pow(q1,2)+pow(q2,2))
     R = np.array([[a1, a2, a3], [b1, b2, b3], [c1, c2, c3]])
+    R = R.transpose()
     return R
 
 #判断是旋转矩阵
@@ -506,7 +508,7 @@ def dicho_iter(data):
     
     iteration = True
     for i in range(0,num):
-        print('====================================')
+        # print('====================================')
         X = XX[i]
         Y = YY[i]
         Z = ZZ[i]
@@ -527,6 +529,15 @@ def dicho_iter(data):
             XYZe = InterpXYZ(data_time[Ne],gpsmat,t_gps)
             # print(XYZs[0],'\n',XYZ_[0],'\n',XYZe[0])
 
+            #j2000->wgs84矩阵 check
+            #Celestial coordinates ( X Y Z) = M x Terrestrial coordinates ( x y z ) 
+            RsJ = InterpRmats(data_time[Ns],rmat,r_time)
+            R_J = InterpRmats(data_time[N_],rmat,r_time)
+            ReJ = InterpRmats(data_time[Ne],rmat,r_time)
+            # RsJ = np.linalg.inv(InterpRmats(data_time[Ns],rmat,r_time))
+            # R_J = np.linalg.inv(InterpRmats(data_time[N_],rmat,r_time))
+            # ReJ = np.linalg.inv(InterpRmats(data_time[Ne],rmat,r_time))
+            
             #check
             #四元数内插
             qs = interpolation_q(data_att,data_time[Ns])
@@ -538,16 +549,6 @@ def dicho_iter(data):
             R_ = q2rotate(q_[0],q_[1],q_[2],q_[3])
             Re = q2rotate(qe[0],qe[1],qe[2],qe[3])
             # print(Rs,'\n',R_,'\n',Re)
-
-            #j2000->wgs84矩阵 check
-            #Celestial coordinates ( X Y Z) = M x Terrestrial coordinates ( x y z ) 
-            RsJ = InterpRmats(data_time[Ns],rmat,r_time).T
-            R_J = InterpRmats(data_time[N_],rmat,r_time).T
-            ReJ = InterpRmats(data_time[Ne],rmat,r_time).T
-            # RsJ = InterpRmats(data_time[Ns],rmat,r_time)
-            # R_J = InterpRmats(data_time[N_],rmat,r_time)
-            # ReJ = InterpRmats(data_time[Ne],rmat,r_time)
-            
             # print(RsJ,'\n',R_J,'\n',ReJ)
 
             #正投影矩阵
@@ -562,16 +563,19 @@ def dicho_iter(data):
             RRs = np.linalg.inv(Rots)
             RR_ = np.linalg.inv(Rot_)
             RRe = np.linalg.inv(Rote)
-            # Rs = (Rots)
-            # R_ = (Rot_)
-            # Re = (Rote)
+            # RRs = (Rots)
+            # RR_ = (Rot_)
+            # RRe = (Rote)
 
             #计算像点
-            xs,ys = cal_ptopts(RRs,X,Y,Z,XYZs[0,0],XYZs[0,1],XYZs[0,2])
-            x_,y_ = cal_ptopts(RR_,X,Y,Z,XYZ_[0,0],XYZ_[0,1],XYZ_[0,2])
-            xe,ye = cal_ptopts(RRe,X,Y,Z,XYZe[0,0],XYZe[0,1],XYZe[0,2])
+            # xs,ys = cal_ptopts(RRs,X,Y,Z,XYZs[0,0],XYZs[0,1],XYZs[0,2])
+            # x_,y_ = cal_ptopts(RR_,X,Y,Z,XYZ_[0,0],XYZ_[0,1],XYZ_[0,2])
+            # xe,ye = cal_ptopts(RRe,X,Y,Z,XYZe[0,0],XYZe[0,1],XYZe[0,2])
+            ys,xs = cal_ptopts(RRs,X,Y,Z,XYZs[0,0],XYZs[0,1],XYZs[0,2])
+            y_,x_ = cal_ptopts(RR_,X,Y,Z,XYZ_[0,0],XYZ_[0,1],XYZ_[0,2])
+            ye,xe = cal_ptopts(RRe,X,Y,Z,XYZe[0,0],XYZe[0,1],XYZe[0,2])
             # print(xs,x_,xe)
-            print(RRs,'\n',RR_,'\n',RRe)
+            # print(RRs,'\n',RR_,'\n',RRe)
 
             if xs<0 and x_<0 and xe<0:
                 iteration = False
@@ -594,10 +598,12 @@ def dicho_iter(data):
                     iteration = False
                     NNX.append(int(N_))
                     NNY.append(int(search_y(y_)))
-                elif Ns == Ne:
-                    iteration = False
-                    NNX.append(int(N_))
-                    NNY.append(int(search_y(y_)))
+                    
+                    print(x_,y_)
+                # elif Ns == Ne:
+                #     iteration = False
+                #     NNX.append(int(N_))
+                #     NNY.append(int(search_y(y_)))
                 else:
                     iteration = True
                     continue
