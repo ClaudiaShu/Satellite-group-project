@@ -20,7 +20,7 @@ wgs84_a = 6378137
 wgs84_f = 1 / 298.257223563
 wgs84_b = wgs84_a - wgs84_f * wgs84_a
 wgs84_e2 = (wgs84_a * wgs84_a - wgs84_b * wgs84_b) / (wgs84_a * wgs84_a)
-F = 1
+F = -1
 ######config######################
 #四元数数据
 print('getting quaternion data')
@@ -214,13 +214,10 @@ def cal_ptopts(R,X,Y,Z,Xs,Ys,Zs):
     YY = cal_Y(R[0][1],R[1][1],R[2][1],X,Xs,Y,Ys,Z,Zs)
     ZZ = cal_Z(R[0][2],R[1][2],R[2][2],X,Xs,Y,Ys,Z,Zs)
 
-    x = -F*XX/ZZ
-    y = -F*YY/ZZ
+    x = F*XX/ZZ
+    y = F*YY/ZZ
 
     # print(x,y)
-    # print('\n')
-    # print(XX,YY,ZZ)
-
     return x,y
 
 #四元数转换为旋转矩阵
@@ -246,7 +243,7 @@ def q2rotate(q1, q2, q3, q4):
     c2 = 2*(q2*q3+q1*q4)
     c3 = 1-2*(pow(q1,2)+pow(q2,2))
     R = np.array([[a1, a2, a3], [b1, b2, b3], [c1, c2, c3]])
-    R = R.transpose()
+    # R = R.transpose()
     return R
 
 #判断是旋转矩阵
@@ -485,7 +482,7 @@ def search_y(dy):
     old_dy = 9999
     y = 9999
     for i in range(len(data_cbr)):
-        check_y = data_cbr[i][0]
+        check_y = data_cbr[i][1]
         min_dy = abs(check_y-dy)
         if min_dy < old_dy:
             old_dy = min_dy
@@ -508,7 +505,7 @@ def dicho_iter(data):
     
     iteration = True
     for i in range(0,num):
-        # print('====================================')
+        print('====================================')
         X = XX[i]
         Y = YY[i]
         Z = ZZ[i]
@@ -519,7 +516,7 @@ def dicho_iter(data):
         while iteration == True:
             # print('iteration')
             N_ = int((Ns+Ne)/2)
-            # print(Ns,N_,Ne)
+
             #check
             # #起点行外方位元素
             XYZs = InterpXYZ(data_time[Ns],gpsmat,t_gps)
@@ -527,55 +524,42 @@ def dicho_iter(data):
             XYZ_ = InterpXYZ(data_time[N_],gpsmat,t_gps)
             # #终点行外方位元素
             XYZe = InterpXYZ(data_time[Ne],gpsmat,t_gps)
-            # print(XYZs[0],'\n',XYZ_[0],'\n',XYZe[0])
 
             #j2000->wgs84矩阵 check
             #Celestial coordinates ( X Y Z) = M x Terrestrial coordinates ( x y z ) 
-            RsJ = InterpRmats(data_time[Ns],rmat,r_time)
-            R_J = InterpRmats(data_time[N_],rmat,r_time)
-            ReJ = InterpRmats(data_time[Ne],rmat,r_time)
-            # RsJ = np.linalg.inv(InterpRmats(data_time[Ns],rmat,r_time))
-            # R_J = np.linalg.inv(InterpRmats(data_time[N_],rmat,r_time))
-            # ReJ = np.linalg.inv(InterpRmats(data_time[Ne],rmat,r_time))
+            RsJ = InterpRmats(data_time[Ns],rmat,r_time).T
+            R_J = InterpRmats(data_time[N_],rmat,r_time).T
+            ReJ = InterpRmats(data_time[Ne],rmat,r_time).T
             
             #check
             #四元数内插
             qs = interpolation_q(data_att,data_time[Ns])
             q_ = interpolation_q(data_att,data_time[N_])
             qe = interpolation_q(data_att,data_time[Ne])
-            # print(qs,q_,qe)
+
             #四元数得到的矩阵 本体->J2000
             Rs = q2rotate(qs[0],qs[1],qs[2],qs[3])
             R_ = q2rotate(q_[0],q_[1],q_[2],q_[3])
             Re = q2rotate(qe[0],qe[1],qe[2],qe[3])
-            # print(Rs,'\n',R_,'\n',Re)
-            # print(RsJ,'\n',R_J,'\n',ReJ)
 
             #正投影矩阵
             Rots = np.dot(RsJ,Rs)
             Rot_ = np.dot(R_J,R_)
             Rote = np.dot(ReJ,Re)
-            # Rots = np.dot(Rs,RsJ)
-            # Rot_ = np.dot(R_,R_J)
-            # Rote = np.dot(Re,ReJ)
 
             #求逆 check
             RRs = np.linalg.inv(Rots)
             RR_ = np.linalg.inv(Rot_)
             RRe = np.linalg.inv(Rote)
-            # RRs = (Rots)
-            # RR_ = (Rot_)
-            # RRe = (Rote)
 
             #计算像点
-            # xs,ys = cal_ptopts(RRs,X,Y,Z,XYZs[0,0],XYZs[0,1],XYZs[0,2])
-            # x_,y_ = cal_ptopts(RR_,X,Y,Z,XYZ_[0,0],XYZ_[0,1],XYZ_[0,2])
-            # xe,ye = cal_ptopts(RRe,X,Y,Z,XYZe[0,0],XYZe[0,1],XYZe[0,2])
-            ys,xs = cal_ptopts(RRs,X,Y,Z,XYZs[0,0],XYZs[0,1],XYZs[0,2])
-            y_,x_ = cal_ptopts(RR_,X,Y,Z,XYZ_[0,0],XYZ_[0,1],XYZ_[0,2])
-            ye,xe = cal_ptopts(RRe,X,Y,Z,XYZe[0,0],XYZe[0,1],XYZe[0,2])
-            # print(xs,x_,xe)
-            # print(RRs,'\n',RR_,'\n',RRe)
+            # ys,xs = cal_ptopts(RRs,X,Y,Z,XYZs[0,0],XYZs[0,1],XYZs[0,2])
+            # y_,x_ = cal_ptopts(RR_,X,Y,Z,XYZ_[0,0],XYZ_[0,1],XYZ_[0,2])
+            # ye,xe = cal_ptopts(RRe,X,Y,Z,XYZe[0,0],XYZe[0,1],XYZe[0,2])
+            xs,ys = cal_ptopts(RRs,X,Y,Z,XYZs[0,0],XYZs[0,1],XYZs[0,2])
+            x_,y_ = cal_ptopts(RR_,X,Y,Z,XYZ_[0,0],XYZ_[0,1],XYZ_[0,2])
+            xe,ye = cal_ptopts(RRe,X,Y,Z,XYZe[0,0],XYZe[0,1],XYZe[0,2])
+            # print(x_,y_)
 
             if xs<0 and x_<0 and xe<0:
                 iteration = False
@@ -598,12 +582,9 @@ def dicho_iter(data):
                     iteration = False
                     NNX.append(int(N_))
                     NNY.append(int(search_y(y_)))
-                    
-                    print(x_,y_)
-                # elif Ns == Ne:
-                #     iteration = False
-                #     NNX.append(int(N_))
-                #     NNY.append(int(search_y(y_)))
+
+                    print(x_,y_,search_y(y_))
+
                 else:
                     iteration = True
                     continue
