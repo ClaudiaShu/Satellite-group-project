@@ -6,12 +6,16 @@ Created on Wed May 13 16:55:14 2020
 """
 
 import numpy as np
+from project import virt_grid
+from scipy import linalg
+data = virt_grid(11,11,3)
 
-X=np.array([-2282126.083,-2214395.2,-558884.639])
-Y=np.array([5054348.290,5882759.5,-1448955.493])
-Z=np.array([3142026.214,2780867.2,-6166468.484])
-r=np.array([5820,5670,5500])
-c=np.array([25,20,10])
+
+X=data[:,1]
+Y=data[:,1]
+Z=data[:,1]
+r=data[:,1]
+c=data[:,1]
 #正投影之后的输入
 
 m=X.shape[0]
@@ -43,7 +47,7 @@ p=np.array([np.ones(m),Zn,Yn,Xn,Zn*Yn,Zn*Xn,Yn*Xn,Zn*Zn,Yn*Yn,Xn*Xn,Zn*Yn*Xn,Zn*
 Mr=np.hstack((p,np.repeat([-rn],19,axis=0).transpose()*p[:,1:20]))
 Mc=np.hstack((p,np.repeat([-cn],19,axis=0).transpose()*p[:,1:20]))
 
-Z = np.zeros((3,39)) 
+Z = np.zeros((m,39)) 
 
 M = np.asarray(np.bmat([[Mr, Z], [Z, Mc]]))
 R=np.hstack((rn,cn))
@@ -51,15 +55,18 @@ W=np.eye(m+m)#设置单位矩阵为初值
 
 
 i=1
-v=np.array([5,5,5,5,5,5])
-while np.max(abs(v))>0.1 and i<100:
+v=5*np.ones([m*2,])
+while np.max(abs(v))>1e-5 and i<300:
     s1=np.dot(M.transpose(),W)
     s2=np.dot(s1,W)
     left=np.dot(s2,M)
     right=np.dot(s2,R)
-    J=np.dot(np.linalg.inv(left),right)
+    #s3=np.linalg.det(left)
+    #print(left)
+    J=np.dot(np.linalg.pinv(left),right)
+    #J = linalg.solve(left,right)
     v=np.dot(np.dot(W,M),J)-np.dot(W,R)
-    print(v)
+    #print(v)
     print(np.max(abs(v)))
     a=J[:20]
     b=np.hstack(([1],J[20:39]))
@@ -74,8 +81,6 @@ while np.max(abs(v))>0.1 and i<100:
     print(i)
     
 print(J)#J是解求的系数
-
-
 
 
 
